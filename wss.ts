@@ -1,4 +1,4 @@
-import { Server } from "https://deno.land/x/wocket@v1.0.0/mod.ts";
+import { Server } from "./deps.ts";
 
 export function startWss(port: number, host = 'localhost') {
     const wss = new Server({

@@ -1,5 +1,5 @@
 
-import { WebSocketClient } from "https://deno.land/x/wocket@v1.0.0/mod.ts";
+import { WebSocketClient } from "./deps.ts";
 import { Callback, DenotaskRequest, DenotaskResponse } from "./types.ts";
 
 let requestHandlerFunction: Callback;

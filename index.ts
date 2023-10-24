@@ -1,10 +1,8 @@
-import { serveListener } from "https://deno.land/std@0.204.0/http/server.ts";
-import { resolve } from "https://deno.land/std@0.204.0/path/mod.ts";
-import "https://deno.land/std@0.204.0/dotenv/load.ts";
-import { WebSocketClient } from "https://deno.land/x/wocket@v1.0.0/mod.ts";
+import { WebSocketClient, Env, resolve, serveListener } from "./deps.ts";
 import { startWss, registerChannel } from './wss.ts';
 import { DenotaskRequest, DenotaskResponse, HttpMethod, HttpStatus } from "./types.ts";
 
+await Env({export: true});
 const HOSTNAME = Deno.env.get('HOSTNAME') || 'localhost';
 const PORT = Number(Deno.env.get('PORT')) || 4505;
 const WS_HOSTNAME = Deno.env.get('WS_HOSTNAME') || 'localhost';
