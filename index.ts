@@ -3,9 +3,9 @@ import { startWss, registerChannel } from './wss.ts';
 import { DenotaskRequest, DenotaskResponse, HttpMethod, HttpStatus } from "./types.ts";
 
 await Env({export: true});
-const HOSTNAME = Deno.env.get('HOSTNAME') || 'localhost';
+const HOSTNAME = Deno.env.get('HOSTNAME') || '127.0.0.1';
 const PORT = Number(Deno.env.get('PORT')) || 4505;
-const WS_HOSTNAME = Deno.env.get('WS_HOSTNAME') || 'localhost';
+const WS_HOSTNAME = Deno.env.get('WS_HOSTNAME') || '127.0.0.1';
 const WS_PORT = Number(Deno.env.get('WS_PORT')) || 4506;
 const FUNCTIONS_SUBDOMAIN = Deno.env.get('FUNCTIONS_SUBDOMAIN') || 's';
 const LOCAL_TASK_DIR = Deno.env.get('LOCAL_TASK_DIR') || 'examples';

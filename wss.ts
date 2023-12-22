@@ -1,6 +1,6 @@
 import { Server } from "./deps.ts";
 
-export function startWss(port: number, host = 'localhost') {
+export function startWss(port: number, host = '127.0.0.1') {
     const wss = new Server({
         hostname: host,
         port: port,
