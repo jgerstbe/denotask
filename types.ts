@@ -21,6 +21,7 @@ export type DenotaskRequest = {
 }
 
 export type DenotaskResponse = {
+    mime: string,
     status: HttpStatus,
     payload: unknown
 }

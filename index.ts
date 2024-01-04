@@ -39,6 +39,7 @@ await serveListener(listener, async (request) => {
     if (!fileInfo.isFile) return new Response('Not Found', { status: 404 });
 
     let denotaskResponse: DenotaskResponse = {
+      mime: 'text/html',
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       payload: 'No message received.'
     };
@@ -58,7 +59,8 @@ await serveListener(listener, async (request) => {
         `--allow-read=${scriptFolderPath},${libScriptPath},${typesPath}`,
         scriptPath,
         wss.address,
-        wssChannel
+        wssChannel,
+        scriptFolderPath
       ],
     });
 
@@ -71,9 +73,8 @@ await serveListener(listener, async (request) => {
     client.close();
     wss.channels.delete(wssChannel);
 
-    let contentType = 'text/html';
     if (typeof(denotaskResponse.payload) !== 'string') {
-      contentType = "application/json";
+      denotaskResponse.mime = "application/json";
       denotaskResponse.payload = JSON.stringify(denotaskResponse.payload);
     };
     console.log('denotaskResponse.payload', denotaskResponse.payload);
@@ -81,7 +82,7 @@ await serveListener(listener, async (request) => {
     return new Response(denotaskResponse.payload as undefined, { 
       status: denotaskResponse.status,
       headers: {
-        "Content-Type": contentType
+        "Content-Type": denotaskResponse.mime
       }
     });
   } catch (error) {

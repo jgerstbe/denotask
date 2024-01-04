@@ -11,6 +11,7 @@ export function handleRequest(handler: Callback) {
 
 const wssAddress = Deno.args[0];
 const wssChannel = Deno.args[1];
+export const CWD = Deno.args[2];
 if (!wssAddress || !wssChannel) Deno.exit();
 
 const client = new WebSocketClient(wssAddress);
