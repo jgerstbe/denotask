@@ -1,6 +1,6 @@
 import { handleRequest  } from "../../handler.ts";
-import { DenotaskRequest, HttpStatus } from "../../types.ts";
-handleRequest(async (request: DenotaskRequest) => {
+import { DenotaskRequest, SimpleDenotaskResponse, HttpStatus } from "../../types.ts";
+handleRequest(async (request: DenotaskRequest): Promise<SimpleDenotaskResponse> => {
   const lat = request.url.searchParams.get('lat');
   const long = request.url.searchParams.get('long');
   if (!lat || !long) return {

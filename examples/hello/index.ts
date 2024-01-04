@@ -1,7 +1,7 @@
 import { CWD, handleRequest } from "../../handler.ts";
-import { DenotaskRequest, HttpStatus } from "../../types.ts";
+import { DenotaskRequest, HttpStatus, SimpleDenotaskResponse } from "../../types.ts";
 import * as o from "https://deno.land/x/cowsay@1.1/mod.ts"
-handleRequest(async (request: DenotaskRequest) => {
+handleRequest(async (request: DenotaskRequest): Promise<SimpleDenotaskResponse> => {
   const files = [];
   for await (const dirEntry of Deno.readDir(CWD)) {
     files.push(dirEntry.name);
@@ -13,8 +13,8 @@ handleRequest(async (request: DenotaskRequest) => {
       wrapLength: 40,
   })
   const payload = `
-    ${cowsay} <br>
-    ${new Date().getTime()} <br>
+    ${cowsay}
+    ${new Date().getTime()}
     ${files.join(', ')}
   `;
   return {

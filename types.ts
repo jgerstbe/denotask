@@ -26,4 +26,6 @@ export type DenotaskResponse = {
     payload: unknown
 }
 
-export type Callback = (request: DenotaskRequest) => Promise<DenotaskResponse>;
+export type SimpleDenotaskResponse = Omit<DenotaskResponse, 'mime'> & { mime?: string };
+
+export type Callback = (request: DenotaskRequest) => Promise<SimpleDenotaskResponse>;
