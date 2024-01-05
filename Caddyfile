@@ -1,0 +1,7 @@
+http://{$FUNCTIONS_SUBDOMAIN}.localtest.me {
+    reverse_proxy denotask:${PORT}
+}
+
+http://*.{$FUNCTIONS_SUBDOMAIN}.localtest.me {
+    reverse_proxy denotask:${PORT}
+}

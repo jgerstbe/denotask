@@ -12,3 +12,13 @@ services:
     volumes:
       - .env:/app/.env:ro
       - ./examples:/app/examples:rw
+
+  caddy:
+    image: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
