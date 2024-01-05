@@ -2,7 +2,7 @@ import { WebSocketClient, Env, resolve, serveListener } from "./deps.ts";
 import { startWss, registerChannel } from './wss.ts';
 import { DenotaskRequest, DenotaskResponse, HttpMethod, HttpStatus } from "./types.ts";
 
-await Env({export: true});
+await Env({ export: true });
 const HOSTNAME = Deno.env.get('HOSTNAME') || '127.0.0.1';
 const PORT = Number(Deno.env.get('PORT')) || 4505;
 const WS_HOSTNAME = Deno.env.get('WS_HOSTNAME') || '127.0.0.1';
@@ -31,12 +31,18 @@ await serveListener(listener, async (request) => {
   }
 
   try {
-    const scriptFolderPath = `${Deno.cwd()}/${LOCAL_TASK_DIR}/${taskUrl}`;
-    const libScriptPath = `${Deno.cwd()}/handler.ts`;
-    const typesPath = `${Deno.cwd()}/types.ts`;
-    const scriptPath = resolve(`${scriptFolderPath}/index.ts`);
-    const fileInfo = await Deno.stat(scriptPath);
-    if (!fileInfo.isFile) return new Response('Not Found', { status: 404 });
+    const scriptFolderPath = resolve(Deno.cwd(), LOCAL_TASK_DIR, taskUrl);
+    const libScriptPath = resolve(Deno.cwd(), 'handler.ts');
+    const typesPath = resolve(Deno.cwd(), 'types.ts');
+    let scriptPath = resolve(scriptFolderPath, 'index.ts');
+    try {
+      const fileInfo = await Deno.stat(scriptPath);
+      if (!fileInfo.isFile) return new Response('Not Found', { status: 404 });
+    } catch {
+      scriptPath = resolve(scriptFolderPath, 'index.js');
+      const fileInfo = await Deno.stat(scriptPath);
+      if (!fileInfo.isFile) return new Response('Not Found', { status: 404 })
+    }
 
     let denotaskResponse: DenotaskResponse = {
       mime: 'text/html',
