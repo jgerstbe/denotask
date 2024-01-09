@@ -1,6 +1,6 @@
 
 import { WebSocketClient } from "./deps.ts";
-import { Callback, DenotaskRequest, DenotaskResponse } from "./types.ts";
+import { Callback, DenotaskRequest, SimpleDenotaskResponse } from "./types.ts";
 
 let requestHandlerFunction: Callback;
 
@@ -27,7 +27,7 @@ client.on(wssChannel, (event: unknown) => {
         throw new Error("Failed to parse request!");
     }
 
-    requestHandlerFunction(denotaskRequest).then((response: DenotaskResponse) => {
+    requestHandlerFunction(denotaskRequest).then((response: SimpleDenotaskResponse) => {
         try {
             client.to(wssChannel, response);
         } catch {
