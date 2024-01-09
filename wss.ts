@@ -1,7 +1,7 @@
-import { Server } from "./deps.ts";
+import { WebSocketServer } from "./deps.ts";
 
 export function startWss(port: number, host = '127.0.0.1') {
-    const wss = new Server({
+    const wss = new WebSocketServer({
         hostname: host,
         port: port,
         protocol: 'ws'
@@ -10,7 +10,7 @@ export function startWss(port: number, host = '127.0.0.1') {
     return wss;
 }
 
-export function registerChannel(server: Server, channelName: string) {
+export function registerChannel(server: WebSocketServer, channelName: string) {
     server.on(channelName, (event) => {
         // deno-lint-ignore no-explicit-any
         server.broadcast(channelName, event.detail.packet as any, event.detail.id);
