@@ -1,5 +1,5 @@
 import { WebSocketClient, resolve, WebSocketServer } from "./deps.ts";
-import { registerChannel } from './wss.ts';
+import { deleteChannel, registerChannel } from './wss.ts';
 import { DenotaskRequest, DenotaskResponse, HttpStatus } from "./types.ts";
 
 export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: DenotaskRequest, LOCAL_TASK_DIR: string, taskUrl: string) {
@@ -50,7 +50,7 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
         console.error('stderr', decoder.decode(stderr));
     
         client.close();
-        wss.channels.delete(wssChannel);
+        deleteChannel(wss, wssChannel);
     
         if (typeof(denotaskResponse.payload) !== 'string') {
           denotaskResponse.mime = "application/json";

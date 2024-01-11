@@ -14,5 +14,9 @@ export function registerChannel(server: WebSocketServer, channelName: string) {
     server.on(channelName, (event) => {
         // deno-lint-ignore no-explicit-any
         server.broadcast(channelName, event.detail.packet as any, event.detail.id);
-    })
+    });
+}
+
+export function deleteChannel(server: WebSocketServer, channelName: string) {
+    server.channels.delete(channelName);
 }
