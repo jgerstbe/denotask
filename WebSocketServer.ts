@@ -1,4 +1,4 @@
-import { Evt } from "./deps.ts";
+import { Ctx, Evt } from "./deps.ts";
 import { DenotaskRequest, DenotaskResponse, HttpStatus } from "./types.ts";
 
 export class WebSocketServer {
@@ -39,9 +39,10 @@ export class WebSocketServer {
   public onClientMessage(uuid: string, callback: any) {
     const client = this.clients.get(uuid);
     if (!client) return new Error('Client not found.');
-    client.bus.attach(callback);
+    const ctx = Evt.newCtx();
+    client.bus.attach(ctx, callback);
     console.log('Handler length', client.bus.getHandlers().length);
-    // TODO remove handlers
+    return ctx;
   }
 
   public upgradeAndHandleWs(request: Request) {
@@ -128,11 +129,13 @@ export async function sendReceiveTask(server: WebSocketServer, taskUrl: string, 
     };
     server.sendToClient(clientId, request);
 
-    server.onClientMessage(clientId, (data: WsTaskResponse) => {
+    const ctx = server.onClientMessage(clientId, (data: WsTaskResponse) => {
       console.log(`tabHandler for requestId ${requestId}:  got a response`, data);
       console.log(data.requestId, requestId);
+      console.log(`ctx`, ctx);
       if (data.requestId !== requestId) return;
       console.log(`tabHandler got a response for requestId ${requestId}:`, data.response);
+      (ctx as Ctx<void>).done();
       clearTimeout(timeout);
       resolve(data);
     });
@@ -140,9 +143,11 @@ export async function sendReceiveTask(server: WebSocketServer, taskUrl: string, 
     // TODO should we return erros as json?
     const timeout = setTimeout(() => {
       console.log('Listener timeout:', taskUrl, requestId);
+      const error = new Error('No response received from upstream handler.');
+      (ctx as Ctx<void>).abort(error);
       reject({
         status: HttpStatus.MISSDIRECTED_REQUEST,
-        payload: 'No response received from upstream handler.'
+        payload: error.message
       });
     }, 5000);
   });
