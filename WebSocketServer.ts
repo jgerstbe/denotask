@@ -1,5 +1,6 @@
 import { Ctx, Evt } from "./deps.ts";
 import { DenotaskRequest, DenotaskResponse, HttpStatus } from "./types.ts";
+import { z } from './deps.ts';
 
 export class WebSocketServer {
   private clients: Map<string, WebSocketClient> = new Map();
@@ -59,30 +60,33 @@ export class WebSocketServer {
       client.bus.post({ type: 'OPEN' });
     };
     client.socket.onmessage = ev => {
-      let messageBody = ev.data;
+      let messageBody: WsTask;
       try {
-        messageBody = JSON.parse(messageBody);
+        messageBody = JSON.parse(ev.data);
+        // i can not use the returned value here at the moment as the custom request/response object will be empty
+        // therefore i still use messageBody
+        WsTaskSchema.parse(messageBody);
         console.log(`Got message from ${client.id}:`, messageBody);
       } catch {
-        const msg = `[${client.id}] Error while parsing messageBody: ${messageBody}`;
+        const msg = `[${client.id}] Error while parsing messageBody: ${ev.data}`;
         client.socket.send(msg);
         return console.error(msg);
       }
       // register as tab handler
-      if (messageBody.type === 'registerHandler') {
+      const registering = WsRegisterTabHandlerSchema.safeParse(messageBody);
+      if (registering.success) {
         // TODO check user rights
-        if (this.handlers.has(messageBody.tab)) {
-          const msg = `[${client.id}] a handler alredy exists for tab ${messageBody.tab}`;
+        if (this.handlers.has(registering.data.tab)) {
+          const msg = `[${client.id}] a handler alredy exists for tab ${registering.data.tab}`;
           client.socket.send(msg);
           return console.error(msg);
         }
-        const msg = `[${client.id}] Successfully set as handler for tab ${messageBody.tab}`;
+        const msg = `[${client.id}] Successfully set as handler for tab ${registering.data.tab}`;
         client.socket.send(msg);
-        this.handlers.set(messageBody.tab, client.id);
+        this.handlers.set(registering.data.tab, client.id);
+        return;
       }
-      // TODO validate WsTask Format
-      const wsTask = messageBody as WsTask;
-      client.bus.post(wsTask);
+      client.bus.post(messageBody);
     };
     client.socket.onclose = closed => {
       console.log(`WS client connection closed for: ${client.id} with Code/Reason ${closed.code} ${closed.reason}`);
@@ -96,27 +100,45 @@ export class WebSocketServer {
   }
 }
 
-interface WebSocketClient {
-  id: string,
-  socket: WebSocket,
-  bus: Evt<WsTask>
-}
+const WebSocketClient = z.object({
+  id: z.string(),
+  socket: z.custom<WebSocket>(),
+  bus: z.custom<Evt<WsTask>>()
+});
 
-interface WsTaskRequest {
-  requestId: string,
-  request: DenotaskRequest
-}
+type WebSocketClient = z.infer<typeof WebSocketClient>;
 
-interface WsTaskResponse {
-  requestId: string,
-  response: DenotaskResponse
-}
+const WsTaskRequestSchema = z.object({
+  requestId: z.string(),
+  request: z.custom<DenotaskRequest>() // TODO DenotaskRequestSchema;
+});
+type WsTaskRequest = z.infer<typeof WsTaskRequestSchema>;
 
-interface WsLifeCycleEvent {
-  type: 'OPEN' | 'CLOSE'
-}
 
-type WsTask = WsTaskRequest | WsTaskResponse | WsLifeCycleEvent;
+const WsTaskResponseSchema = z.object({
+  requestId: z.string(),
+  response: z.custom<DenotaskResponse>() // DenotaskResponseSchema;
+});
+type WsTaskResponse = z.infer<typeof WsTaskResponseSchema>;
+
+const WsLifeCycleEventSchema = z.object({
+  type: z.union([z.literal('OPEN'), z.literal('CLOSE')]),
+});
+type WsLifeCycleEvent = z.infer<typeof WsLifeCycleEventSchema>;
+
+const WsRegisterTabHandlerSchema = z.object({
+  type: z.literal('registerHandler'),
+  tab: z.string(),
+});
+type WsRegisterTabHandler = z.infer<typeof WsRegisterTabHandlerSchema>;
+
+const WsTaskSchema = z.union([
+  WsTaskRequestSchema,
+  WsTaskResponseSchema,
+  WsLifeCycleEventSchema,
+  WsRegisterTabHandlerSchema,
+]);
+type WsTask = z.infer<typeof WsTaskSchema>;
 
 export async function sendReceiveTask(server: WebSocketServer, taskUrl: string, clientId: string, denotaskRequest: DenotaskRequest) {
   const requestId = crypto.randomUUID();
