@@ -77,7 +77,6 @@ export class WebSocketServer {
     if (!client) return new Error('Client not found.');
     const ctx = Evt.newCtx();
     client.bus.attach(ctx, callback);
-    console.log('Client length', this.clients.size);
     console.log('Handler length', client.bus.getHandlers().length);
     return ctx;
   }
@@ -90,11 +89,12 @@ export class WebSocketServer {
   }
 
   public upgradeAndHandleIpc(request: Request, clientId: string, key:string) {
-    const abc = this.clientRegistrationList.get(clientId);
-    if (!abc) throw Error(`ClientId ${clientId} was not announced.`);
-    const isNotAuthenticated = abc !== key;
+    const announcementKey = this.clientRegistrationList.get(clientId);
+    if (!announcementKey) throw Error(`ClientId ${clientId} was not announced.`);
+    const isNotAuthenticated = announcementKey !== key;
     if (isNotAuthenticated) throw Error(`Authentication failed for clientId ${clientId}.`);
     
+    this.clientRegistrationList.delete(clientId);
     const { response, socket } = Deno.upgradeWebSocket(request);
     const client = this.addClient(socket, clientId);
     client.socket.onmessage = ev => {

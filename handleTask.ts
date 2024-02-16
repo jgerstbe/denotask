@@ -23,11 +23,11 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
         };
         
         const { clientId, key } = wss.announceClient();
-        const p = new Promise<void>((res, rej) => {
+        const requestId = crypto.randomUUID();
+        const taskPromise = new Promise<void>((res, rej) => {
           const ctx = wss.onClientEvent((data: ClientConnectionEvent) => {
             console.log(`Server got a ClientConnectionEvent, waiting for ${clientId}, got:`, data);
-            if (data.clientId !== clientId) return;
-            const requestId = crypto.randomUUID();
+            if (data.clientId !== clientId) return;          
             console.log('GOT MATCHHHH', requestId);
             const responseCtx = wss.onClientMessage(clientId, (response: WsTaskResponse) => {
               console.log('asdljkasjdlas', response)
@@ -35,12 +35,21 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
               denotaskResponse = response.response;
               (responseCtx as Ctx<void>).done();
               (ctx as Ctx<void>).done();
+              clearTimeout(timeout);
               res();
-            })
+            });
             wss.sendToClient(clientId, {
               id: requestId,
               request: denotaskRequest
             });
+
+            // TODO should we return erros as json?
+            const timeout = setTimeout(() => {
+              console.log('Listener timeout:', taskUrl, requestId);
+              (responseCtx as Ctx<void>).done();
+              (ctx as Ctx<void>).done();
+              rej();
+            }, 5000);
           });
         });
     
@@ -57,19 +66,12 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
           ],
         });
 
-        // const c = command.spawn();
-        // await p;
-        // const { code, stdout, stderr } = await c.output();
-        const [ a, {code, stdout, stderr}] = await Promise.all([p, command.output()])
-        // const { code, stdout, stderr } = await command.output();
+        const [ _, {code, stdout, stderr}] = await Promise.all([taskPromise, command.output()]);
 
         const decoder = new TextDecoder();
         console.log('code', code);
         console.log('stout', decoder.decode(stdout));
         console.error('stderr', decoder.decode(stderr));
-    
-        // client.close();
-        // deleteChannel(wss, wssChannel);
     
         if (typeof(denotaskResponse.payload) !== 'string') {
           denotaskResponse.mime = "application/json";
@@ -80,7 +82,8 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
         return new Response(denotaskResponse.payload as undefined, { 
           status: denotaskResponse.status,
           headers: {
-            "Content-Type": denotaskResponse.mime || 'text/html'
+            "Content-Type": denotaskResponse.mime || 'text/html',
+            "X-DENOTASK-TRACE-ID": requestId
           }
         });
       } catch (error) {
