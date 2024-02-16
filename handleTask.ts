@@ -1,6 +1,6 @@
-import { WebSocketClient, resolve, WebSocketServer } from "./deps.ts";
-import { deleteChannel, registerChannel } from './wss.ts';
-import { DenotaskRequest, DenotaskResponse, HttpStatus } from "./types.ts";
+import { Ctx, resolve } from "./deps.ts";
+import { ClientConnectionEvent, WebSocketServer } from "./WebSocketServer.ts";
+import { DenotaskRequest, HttpStatus, SimpleDenotaskResponse, WsTaskResponse } from "./types.ts";
 
 export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: DenotaskRequest, LOCAL_TASK_DIR: string, taskUrl: string) {
     try {
@@ -17,18 +17,31 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
           if (!fileInfo.isFile) return new Response('Not Found', { status: 404 })
         }
     
-        let denotaskResponse: DenotaskResponse = {
-          mime: 'text/html',
+        let denotaskResponse: SimpleDenotaskResponse = {
           status: HttpStatus.INTERNAL_SERVER_ERROR,
           payload: 'No message received.'
         };
-        const wssChannel = crypto.randomUUID();
-        registerChannel(wss, wssChannel);
-        const client = new WebSocketClient(wss.address);
-        client.on(wssChannel, (event:unknown) => {
-          if (event === 'pingpong') return client.to(wssChannel, denotaskRequest);
-          console.log(`Server got a message!`, event);
-          denotaskResponse = event as DenotaskResponse;
+        
+        const { clientId, key } = wss.announceClient();
+        const p = new Promise<void>((res, rej) => {
+          const ctx = wss.onClientEvent((data: ClientConnectionEvent) => {
+            console.log(`Server got a ClientConnectionEvent, waiting for ${clientId}, got:`, data);
+            if (data.clientId !== clientId) return;
+            const requestId = crypto.randomUUID();
+            console.log('GOT MATCHHHH', requestId);
+            const responseCtx = wss.onClientMessage(clientId, (response: WsTaskResponse) => {
+              console.log('asdljkasjdlas', response)
+              if (response.requestId !== requestId) return;
+              denotaskResponse = response.response;
+              (responseCtx as Ctx<void>).done();
+              (ctx as Ctx<void>).done();
+              res();
+            })
+            wss.sendToClient(clientId, {
+              id: requestId,
+              request: denotaskRequest
+            });
+          });
         });
     
         const command = new Deno.Command('deno', {
@@ -37,20 +50,26 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
             '--allow-net',
             `--allow-read=${scriptFolderPath},${libScriptPath},${typesPath}`,
             scriptPath,
-            wss.address,
-            wssChannel,
+            clientId,
+            key,
+            wss.host,
             scriptFolderPath
           ],
         });
-    
-        const { code, stdout, stderr } = await command.output();
+
+        // const c = command.spawn();
+        // await p;
+        // const { code, stdout, stderr } = await c.output();
+        const [ a, {code, stdout, stderr}] = await Promise.all([p, command.output()])
+        // const { code, stdout, stderr } = await command.output();
+
         const decoder = new TextDecoder();
         console.log('code', code);
         console.log('stout', decoder.decode(stdout));
         console.error('stderr', decoder.decode(stderr));
     
-        client.close();
-        deleteChannel(wss, wssChannel);
+        // client.close();
+        // deleteChannel(wss, wssChannel);
     
         if (typeof(denotaskResponse.payload) !== 'string') {
           denotaskResponse.mime = "application/json";
@@ -61,7 +80,7 @@ export async function handleLocalTask(wss: WebSocketServer, denotaskRequest: Den
         return new Response(denotaskResponse.payload as undefined, { 
           status: denotaskResponse.status,
           headers: {
-            "Content-Type": denotaskResponse.mime
+            "Content-Type": denotaskResponse.mime || 'text/html'
           }
         });
       } catch (error) {

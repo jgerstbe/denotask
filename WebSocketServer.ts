@@ -2,12 +2,27 @@ import { Ctx, Evt } from "./deps.ts";
 import { DenotaskRequest, DenotaskResponse, HttpStatus } from "./types.ts";
 import { z } from './deps.ts';
 
+const clientConnectionEvent = z.object({
+  clientId: z.string(),
+  type: z.union([z.literal('CONNECTED'), z.literal('DISCONNECTED')]),
+});
+
+export type ClientConnectionEvent = z.infer<typeof clientConnectionEvent>;
+
 export class WebSocketServer {
   private clients: Map<string, WebSocketClient> = new Map();
   // Map<tabPrefix, clientId>
-  private handlers: Map<string, string> = new Map(); 
+  private handlers: Map<string, string> = new Map();
+  // Map<uuid, key>
+  private clientRegistrationList: Map<string, string> = new Map();
+  readonly clientEventBus = Evt.create<ClientConnectionEvent>();
+  readonly host: string;
 
-  addClient(socket: WebSocket, uuid?: string): WebSocketClient {
+  constructor(host: string) {
+    this.host = host;
+  }
+
+  private addClient(socket: WebSocket, uuid?: string): WebSocketClient {
     if (!uuid) uuid = crypto.randomUUID();
     if (this.clients.has(uuid)) throw new Error('This UUID already exists!');
     const bus = Evt.create<WsTask>();
@@ -17,17 +32,37 @@ export class WebSocketServer {
       bus
     };
     this.clients.set(uuid, wsc);
+    socket.onopen = () => this.sendClientConnectedEvent(uuid!);
     return wsc;
   }
 
+  private sendClientConnectedEvent(uuid: string) {
+    console.log(`Sending connected event for client ${uuid}.`);
+    this.clientEventBus.post({
+      clientId: uuid,
+      type: 'CONNECTED'
+    });
+  }
+
   private removeClient(uuid: string) {
-    this.clients.delete(uuid);
     this.handlers.forEach((value, key) => {
         if(value === uuid){
           console.log(`Removed client ${uuid} as handler for ${key}`);
           this.handlers.delete(key);
         }
     });
+    this.clientEventBus.post({
+      clientId: uuid,
+      type: 'DISCONNECTED'
+    });
+    this.clients.delete(uuid);
+  }
+
+  // deno-lint-ignore no-explicit-any
+  public onClientEvent(callback: any) {
+    const ctx = Evt.newCtx();
+    this.clientEventBus.attach(ctx, callback);
+    return ctx;
   }
 
   public sendToClient(uuid: string, payload: unknown) {
@@ -42,6 +77,7 @@ export class WebSocketServer {
     if (!client) return new Error('Client not found.');
     const ctx = Evt.newCtx();
     client.bus.attach(ctx, callback);
+    console.log('Client length', this.clients.size);
     console.log('Handler length', client.bus.getHandlers().length);
     return ctx;
   }
@@ -50,6 +86,37 @@ export class WebSocketServer {
     const { response, socket } = Deno.upgradeWebSocket(request);
     const client = this.addClient(socket);
     this.attachClientHandler(client);
+    return response;
+  }
+
+  public upgradeAndHandleIpc(request: Request, clientId: string, key:string) {
+    const abc = this.clientRegistrationList.get(clientId);
+    if (!abc) throw Error(`ClientId ${clientId} was not announced.`);
+    const isNotAuthenticated = abc !== key;
+    if (isNotAuthenticated) throw Error(`Authentication failed for clientId ${clientId}.`);
+    
+    const { response, socket } = Deno.upgradeWebSocket(request);
+    const client = this.addClient(socket, clientId);
+    client.socket.onmessage = ev => {
+      let messageBody: WsTask;
+      try {
+        messageBody = JSON.parse(ev.data);
+        // i can not use the returned value here at the moment as the custom request/response object will be empty
+        // therefore i still use messageBody
+        WsTaskSchema.parse(messageBody);
+        console.log(`[IPC] Got message from ${client.id}:`, messageBody);
+      } catch {
+        const msg = `[${client.id}] Error while parsing messageBody: ${ev.data}`;
+        client.socket.send(msg);
+        return console.error(msg);
+      }
+      client.bus.post(messageBody);
+    }
+    client.socket.onclose = closed => {
+      console.log(`[IPC] WS client connection closed for: ${client.id} with Code/Reason ${closed.code} ${closed.reason}`);
+      client.bus.post({ type: 'CLOSE' });
+      this.removeClient(client.id);
+    }
     return response;
   }
 
@@ -66,7 +133,7 @@ export class WebSocketServer {
         // i can not use the returned value here at the moment as the custom request/response object will be empty
         // therefore i still use messageBody
         WsTaskSchema.parse(messageBody);
-        console.log(`Got message from ${client.id}:`, messageBody);
+        console.log(`[TAB] Got message from ${client.id}:`, messageBody);
       } catch {
         const msg = `[${client.id}] Error while parsing messageBody: ${ev.data}`;
         client.socket.send(msg);
@@ -89,10 +156,17 @@ export class WebSocketServer {
       client.bus.post(messageBody);
     };
     client.socket.onclose = closed => {
-      console.log(`WS client connection closed for: ${client.id} with Code/Reason ${closed.code} ${closed.reason}`);
+      console.log(`[TAB] WS client connection closed for: ${client.id} with Code/Reason ${closed.code} ${closed.reason}`);
       client.bus.post({ type: 'CLOSE' });
       this.removeClient(client.id);
     }
+  }
+
+  public announceClient() {
+    const clientId = crypto.randomUUID();
+    const key = crypto.randomUUID();
+    this.clientRegistrationList.set(clientId, key);
+    return { clientId, key };
   }
 
   public getHandlingClient(tabUrl: string) {
